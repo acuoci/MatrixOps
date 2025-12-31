@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build Release - ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      matrix:
+        config:
+        - {
+            name: "Ubuntu",
+            os: ubuntu-latest,
+            artifact: "matrixops-linux.tar.gz"
+          }
+        - {
+            name: "macOS",
+            os: macos-latest,
+            artifact: "matrixops-macos.tar.gz"
+          }
+        - {
+            name: "Windows",
+            os: windows-latest,
+            artifact: "matrixops-windows.zip"
+          }
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest -C Release --output-on-failure
+
+    - name: Install
+      run: cmake --install build --prefix install
+
+    - name: Package (Unix)
+      if: runner.os != 'Windows'
+      run: tar -czf ${{ matrix.config.artifact }} -C install .
+
+    - name: Package (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        Compress-Archive -Path install\* -DestinationPath ${{ matrix.config.artifact }}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.config.artifact }}
+        path: ${{ matrix.config.artifact }}
+
+  create-release:
+    name: Create Release
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          matrixops-linux.tar.gz/matrixops-linux.tar.gz
+          matrixops-macos.tar.gz/matrixops-macos.tar.gz
+          matrixops-windows.zip/matrixops-windows.zip
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

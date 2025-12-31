@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # Code formatting check
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run clang-format
+      uses: jidicula/clang-format-action@v4.11.0
+      with:
+        clang-format-version: '17'
+        check-path: .
+        fallback-style: 'LLVM'
+
+  # Static analysis
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install clang-tidy
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tidy-17
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: Run clang-tidy
+      run: |
+        clang-tidy-17 --config-file=.clang-tidy -p build src/*.cpp include/matrixops/*.h
+
+  # Multi-platform build and test
+  build-and-test:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+        - {
+            name: "Ubuntu GCC",
+            os: ubuntu-latest,
+            cc: "gcc-12",
+            cxx: "g++-12",
+            coverage: true
+          }
+        - {
+            name: "Ubuntu Clang",
+            os: ubuntu-latest,
+            cc: "clang-15",
+            cxx: "clang++-15",
+            coverage: false
+          }
+        - {
+            name: "macOS",
+            os: macos-latest,
+            cc: "clang",
+            cxx: "clang++",
+            coverage: false
+          }
+        - {
+            name: "Windows MSVC",
+            os: windows-latest,
+            cc: "cl",
+            cxx: "cl",
+            coverage: false
+          }
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lcov
+
+    - name: Configure CMake
+      run: >
+        cmake -B build
+        -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        -DCMAKE_C_COMPILER=${{matrix.config.cc}}
+        -DCMAKE_CXX_COMPILER=${{matrix.config.cxx}}
+        -DMATRIXOPS_ENABLE_COVERAGE=${{matrix.config.coverage}}
+
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}}
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure
+
+    - name: Generate coverage report
+      if: matrix.config.coverage
+      run: |
+        lcov --directory build --capture --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/benchmarks/*' '*/_deps/*' --output-file coverage.info
+        lcov --list coverage.info
+
+    - name: Upload coverage to Codecov
+      if: matrix.config.coverage
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./coverage.info
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Sanitizer builds
+  sanitizers:
+    name: ${{ matrix.sanitizer }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined, thread]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake with ${{ matrix.sanitizer }} sanitizer
+      run: >
+        cmake -B build
+        -DCMAKE_BUILD_TYPE=Debug
+        -DCMAKE_CXX_COMPILER=clang++-15
+        -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -g"
+
+    - name: Build
+      run: cmake --build build
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest --output-on-failure
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1
+        UBSAN_OPTIONS: print_stacktrace=1
+
+  # Performance regression testing
+  performance:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for comparison
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build benchmarks
+      run: cmake --build build --target matrixops_benchmarks
+
+    - name: Run benchmarks
+      run: ./build/benchmarks/matrixops_benchmarks --benchmark_format=json > benchmark_result.json
+
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: 'googlecpp'
+        output-file-path: benchmark_result.json
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        # Alert if performance degrades by 20%
+        alert-threshold: '120%'
+        comment-on-alert: true
+        fail-on-alert: false

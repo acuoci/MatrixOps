@@ -1,0 +1,57 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-docs:
+    name: Build and Deploy Documentation
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Doxygen
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y doxygen graphviz
+
+    - name: Create docs directory
+      run: mkdir -p docs
+
+    - name: Create Doxyfile
+      run: |
+        cat > Doxyfile << 'EOF'
+        PROJECT_NAME           = "MatrixOps"
+        PROJECT_NUMBER         = "1.0.0"
+        PROJECT_BRIEF          = "A tutorial project for professional C++ GitHub workflows"
+        OUTPUT_DIRECTORY       = docs/html
+        INPUT                  = include/ src/ README.md
+        RECURSIVE              = YES
+        EXTRACT_ALL            = YES
+        EXTRACT_PRIVATE        = NO
+        EXTRACT_STATIC         = YES
+        GENERATE_HTML          = YES
+        GENERATE_LATEX         = NO
+        HTML_OUTPUT            = .
+        USE_MDFILE_AS_MAINPAGE = README.md
+        HAVE_DOT               = YES
+        CALL_GRAPH             = YES
+        CALLER_GRAPH           = YES
+        DOT_IMAGE_FORMAT       = svg
+        INTERACTIVE_SVG        = YES
+        EOF
+
+    - name: Generate documentation
+      run: doxygen Doxyfile
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/html
+        force_orphan: true
