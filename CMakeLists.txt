@@ -19,6 +19,14 @@ option(MATRIXOPS_BUILD_DOCS "Build documentation" OFF)
 option(MATRIXOPS_ENABLE_COVERAGE "Enable code coverage" OFF)
 option(MATRIXOPS_ENABLE_SANITIZERS "Enable sanitizers" OFF)
 
+# Code coverage setup (must be before add_library)
+if(MATRIXOPS_ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        add_compile_options(--coverage)
+        add_link_options(--coverage)
+    endif()
+endif()
+
 # Create library
 add_library(matrixops
     src/matrix.cpp
@@ -56,13 +64,6 @@ if(MATRIXOPS_ENABLE_SANITIZERS)
     endif()
 endif()
 
-# Code coverage
-if(MATRIXOPS_ENABLE_COVERAGE)
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-        target_compile_options(matrixops PRIVATE --coverage)
-        target_link_options(matrixops PRIVATE --coverage)
-    endif()
-endif()
 
 # Testing
 if(MATRIXOPS_BUILD_TESTS)
