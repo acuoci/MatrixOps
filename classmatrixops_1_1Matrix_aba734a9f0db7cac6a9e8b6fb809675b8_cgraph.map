@@ -1,0 +1,7 @@
+<map id="matrixops::Matrix::Matrix" name="matrixops::Matrix::Matrix">
+<area shape="rect" id="Node000001" title="Construct a matrix with given dimensions." alt="" coords="5,23,151,63"/>
+<area shape="rect" id="Node000002" href="$classmatrixops_1_1Matrix.html#a94d5d904b166e3cfb8aaebf73f846f12" title="Get number of columns." alt="" coords="201,5,372,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="150,32,187,27,188,33,151,37"/>
+<area shape="rect" id="Node000003" href="$classmatrixops_1_1Matrix.html#a059d718464a43e3a69c89b5aad1b8ba3" title="Get number of rows." alt="" coords="199,55,375,80"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="151,49,185,53,185,58,150,54"/>
+</map>
